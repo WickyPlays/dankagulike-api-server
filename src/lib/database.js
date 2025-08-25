@@ -2,11 +2,21 @@ import { Pool } from "pg";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
 });
 
-pool.on("connect", () => {
+let firstCreated = false
+
+pool.on("connect", async () => {
   console.log("Connected to PostgreSQL database");
+
+  if (!firstCreated) {
+    await initializeDatabase();
+    firstCreated = true
+  }
 });
 
 pool.on("error", (err) => {
@@ -15,6 +25,7 @@ pool.on("error", (err) => {
 });
 
 async function initializeDatabase() {
+  console.log("Initializing database tables...");
   try {
     // Create contents table
     await pool.query(`CREATE TABLE IF NOT EXISTS contents (
@@ -97,9 +108,4 @@ async function query(text, params) {
   }
 }
 
-export {
-  pool,
-  initializeDatabase,
-  getClient,
-  query,
-};
+export { pool, initializeDatabase, getClient, query };
