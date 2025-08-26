@@ -26,8 +26,10 @@ export async function POST(request) {
       );
     }
 
+    console.log(`ENV token: ${process.env.JWT_TOKEN}`);
+
     const token = jwt.sign({ aid: account.account_id }, process.env.JWT_TOKEN, {
-      expiresIn: "24h",
+      expiresIn: "30d",
     });
 
     await query(`UPDATE accounts SET token = $1 WHERE account_id = $2`, [
