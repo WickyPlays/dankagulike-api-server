@@ -1,28 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
+import { useState } from "react";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import "../page.scss";
 
-export default function SearchForm({ initialSearchBy, initialSearch }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+export default function SearchForm({ initialSearchBy, initialSearch, onSearch }) {
   const [currentSearchBy, setCurrentSearchBy] = useState(initialSearchBy);
   const [currentSearch, setCurrentSearch] = useState(initialSearch);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("searchBy", currentSearchBy);
-    params.set("search", currentSearch);
-    params.set("page", "1");
-    router.push(`/?${params.toString()}`);
+    onSearch(currentSearchBy, currentSearch);
   };
 
   return (

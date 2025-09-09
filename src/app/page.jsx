@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -30,6 +30,7 @@ function transformContent(content) {
 }
 
 export default function Page() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const searchBy = searchParams.get("searchBy") || "title";
@@ -112,7 +113,17 @@ export default function Page() {
           </Typography>
         </Box>
         <Box className="search-container">
-          <SearchForm initialSearchBy={searchBy} initialSearch={search} />
+          <SearchForm
+            initialSearchBy={searchBy}
+            initialSearch={search}
+            onSearch={(searchBy, search) => {
+              const params = new URLSearchParams(searchParams.toString());
+              params.set("searchBy", searchBy);
+              params.set("search", search);
+              params.set("page", "1");
+              router.push(`/?${params.toString()}`);
+            }}
+          />
           <Button
             variant="contained"
             color="primary"
