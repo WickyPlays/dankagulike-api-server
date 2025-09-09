@@ -1,30 +1,32 @@
+import { connectDB } from "@/lib/db";
+import { Likes } from "@/models/likes";
+import { Votes } from "@/models/votes";
+import { successMessage } from "@/utils/constants";
 import { NextResponse } from "next/server";
-import { query } from "@/lib/database";
 
 export async function GET(request, { params }) {
+  await connectDB();
   const userId = params.userId;
-  const result = await query(`SELECT * FROM likes WHERE user_id = $1`, [
-    userId,
-  ]);
-  const likes = result.rows.map((l) => ({
-    userId: l.user_id,
-    voteId: l.vote_id,
-  }));
-  return NextResponse.json({ likes });
+  const likes = await Likes.find({ userId: userId });
+  return NextResponse.json({ likes: likes });
 }
 
 export async function PUT(request, { params }) {
-  const userId = await params.userId;
-  const { voteId } = await request.json();
+  await connectDB();
+  const body = await request.json();
+  const voteId = body.voteId;
+
   try {
-    await query(`INSERT INTO likes (user_id, vote_id) VALUES ($1, $2)`, [
-      userId,
-      voteId,
-    ]);
-    await query(`UPDATE votes SET "like" = "like" + 1 WHERE id = $1`, [
-      voteId,
-    ]);
-    return NextResponse.json({ message: "Operation was successful." });
+    await Likes.insertMany({
+      userId: params.userId,
+      voteId: voteId,
+    });
+
+    await Votes.updateOne(
+      { id: voteId },
+      { $inc: { like: 1 } }
+    );
+    return NextResponse.json(successMessage);
   } catch (error) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }

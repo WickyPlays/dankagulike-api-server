@@ -1,20 +1,14 @@
+import { connectDB } from "@/lib/db";
+import { Contents } from "@/models/contents";
 import { NextResponse } from "next/server";
-import { query } from "@/lib/database";
-import { convertLinkToDownloadable } from "@/lib/converter";
 
 export async function GET(request, { params }) {
+  await connectDB();
   const id = params.id;
-  const result = await query(
-    `SELECT description, download_url, image_url FROM contents WHERE id = $1`,
-    [id]
-  );
-  let content = result.rows[0];
-  if (content) {
-    content = {
-      description: content.description,
-      downloadUrl: convertLinkToDownloadable(content.download_url),
-      imageUrl: content.image_url,
-    };
-  }
-  return NextResponse.json(content);
+  const content = await Contents.findOne({ id: id });
+  return NextResponse.json({
+    description: content?.description,
+    downloadUrl: content?.downloadUrl,
+    imageUrl: content?.imageUrl,
+  });
 }

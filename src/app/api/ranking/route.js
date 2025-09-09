@@ -1,144 +1,147 @@
+import { connectDB } from "@/lib/db";
+import { Ranking } from "@/models/ranking";
+import { Accounts } from "@/models/accounts";
 import { NextResponse } from "next/server";
-import { query } from "@/lib/database";
 
 export async function GET(request) {
+  await connectDB();
   const { searchParams } = new URL(request.url);
-  const chartHash = searchParams.get("chartHash");
-  const difficulty = searchParams.get("difficulty");
+  const chartHash = searchParams.get('chartHash');
+  const difficulty = searchParams.get('difficulty');
+
+  // パラメータチェック
+  if (!chartHash || !difficulty) {
+    return NextResponse.json({
+      error: "chartHash and difficulty are required"
+    }, { status: 400 });
+  }
+
+  const query = {
+    chartHash: String(chartHash).trim(),
+    difficulty: Number(difficulty),
+  };
 
   try {
-    if (!chartHash || !difficulty) {
-      return NextResponse.json(
-        { error: "chartHash and difficulty are required" },
-        { status: 400 }
-      );
-    }
+    const ranking = await Ranking.aggregate([
+      // 対象の譜面のスコアを絞り込み
+      { $match: query },
 
-    const result = await query(
-      `SELECT r.*, a.name, a.icon 
-       FROM ranking r 
-       LEFT JOIN accounts a ON r.account_id = a.account_id 
-       WHERE r.chart_hash = $1 AND r.difficulty = $2 
-       ORDER BY r.score DESC, r.ab_count DESC 
-       LIMIT 200`,
-      [chartHash, difficulty]
-    );
+      // スコア降順 → abCount降順
+      { $sort: { score: -1, abCount: -1 } },
 
-    const data = result.rows.map((r) => ({
-      score: r.score,
-      abCount: r.ab_count,
-      date: r.date,
-      account: r.account_id
-        ? {
-            name: r.name,
-            icon: r.icon,
-          }
-        : null,
-    }));
+      // アカウント情報を結合
+      {
+        $lookup: {
+          from: "accounts",         // コレクション名（モデル名の複数形）
+          localField: "accountId",  // ranking のフィールド
+          foreignField: "accountId",// accounts のフィールド
+          as: "account"
+        }
+      },
 
-    return NextResponse.json({ ranking: data });
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+      // account は配列で入るので展開
+      { $unwind: { path: "$account", preserveNullAndEmptyArrays: true } },
+
+      // banned が true のものを除外（カラムが無い or false は許可）
+      {
+        $match: {
+          $or: [
+            { "account.banned": { $exists: false } },
+            { "account.banned": false }
+          ]
+        }
+      },
+
+      // 必要なフィールドだけ返す
+      {
+        $project: {
+          _id: 0,
+          score: 1,
+          abCount: 1,
+          date: 1,
+          "account.name": 1,
+          "account.icon": 1
+        }
+      },
+
+      // 上位200件に制限
+      { $limit: 200 }
+    ]);
+
+    return NextResponse.json({ ranking: ranking });
+  } catch (err) {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
 export async function POST(request) {
+  await connectDB();
+  const body = await request.json();
   try {
-    const { songTitle, difficulty, chartHash, accountId, accountToken, score, maxScore } =
-      await request.json();
+    const { songTitle, difficulty, chartHash, accountId, accountToken, score, maxScore } = body;
 
-    if (
-      !songTitle ||
-      !chartHash ||
-      !accountId ||
-      !accountToken ||
-      score == null ||
-      maxScore == null
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "songTitle, chartHash, accountId, accountToken, score, and maxScore are required",
-        },
-        { status: 400 }
-      );
+    // 必須チェック
+    if (!songTitle || !chartHash || !accountId || !accountToken || score == null || maxScore == null) {
+      return NextResponse.json({ error: "songTitle, chartHash, accountId, accountToken, score, and maxScore are required" }, { status: 400 });
     }
 
-    const account = await query(
-      `SELECT * FROM accounts WHERE account_id = $1 AND token = $2`,
-      [accountId, accountToken]
-    );
-
-    if (account.rows.length === 0) {
-      return NextResponse.json(
-        { error: "Your account login token is invalid" },
-        { status: 403 }
-      );
+    // トークンの検証とアカウントのバンチェック
+    const account = await Accounts.findOne({ accountId });
+    if (!account || account.token !== accountToken) {
+      return NextResponse.json({ error: "Your account login token is invalid" }, { status: 403 });
     }
 
+    if (account.banned) {
+      return NextResponse.json({ error: "You cannot perform this action because your account is banned." }, { status: 403 });
+    }
+
+    // 今日の日付を "YYYY-MM-DD" 形式で取得
     const today = new Date().toISOString().split("T")[0];
 
-    const existing = await query(
-      `SELECT * FROM ranking WHERE song_title = $1 AND difficulty = $2 AND chart_hash = $3 AND account_id = $4`,
-      [songTitle, difficulty, chartHash, accountId]
-    );
+    // 既存データを検索
+    const existing = await Ranking.findOne({ songTitle, difficulty, chartHash, accountId });
 
-    if (existing.rows.length > 0) {
+    if (existing) {
+      
       let updated = false;
-      let newScore = existing.rows[0].score;
-      let newAbCount = existing.rows[0].ab_count;
-      let newDate = existing.rows[0].date;
 
-      if (score > (existing.rows[0].score || 0)) {
-        newScore = score;
-        newDate = today;
+      // スコアが更新された場合のみ更新
+      if (score > (existing.score ?? 0)) {
+        existing.score = score;
+        existing.date = today;  // 更新した日付を記録
         updated = true;
       }
 
+      // 満点を取った場合はABカウンター加算
       if (score === maxScore) {
-        newAbCount = (existing.rows[0].ab_count || 0) + 1;
-        newDate = today;
+        existing.abCount = (existing.abCount ?? 0) + 1;
+        existing.date = today;  // プレイ日を更新
         updated = true;
       }
 
+      // 更新があった場合のみ保存
       if (updated) {
-        await query(
-          `UPDATE ranking SET score = $1, ab_count = $2, date = $3 
-           WHERE song_title = $4 AND difficulty = $5 AND chart_hash = $6 AND account_id = $7`,
-          [newScore, newAbCount, newDate, songTitle, difficulty, chartHash, accountId]
-        );
-
+        await existing.save();
         return NextResponse.json({ message: "Ranking updated successfully." });
       } else {
         return NextResponse.json({ message: "No ranking update needed." });
       }
     }
 
-    await query(
-      `INSERT INTO ranking (song_title, difficulty, chart_hash, account_id, score, ab_count, date) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        songTitle,
-        difficulty,
-        chartHash,
-        accountId,
-        score,
-        score === maxScore ? 1 : 0,
-        today,
-      ]
-    );
+    // データが存在しない場合 → 新規登録
+    const rankingData = new Ranking({
+      songTitle,
+      difficulty,
+      chartHash,
+      accountId,
+      score,
+      abCount: score === maxScore ? 1 : 0, // 満点なら初期値1
+      date: today
+    });
+    await rankingData.save();
 
-    return NextResponse.json(
-      { message: "Ranking created successfully." },
-      { status: 201 }
-    );
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: "Ranking created successfully." }, { status: 201 });
+  } catch (err) {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,14 +1,6 @@
 "use client";
 
-import "./styles.scss";
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Grid from "@mui/material/Grid";
-import Typography from "@mui/material/Typography";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
+import { useRouter } from "next/navigation";
 import TableContainer from "@mui/material/TableContainer";
 import Table from "@mui/material/Table";
 import TableHead from "@mui/material/TableHead";
@@ -19,6 +11,8 @@ import TableSortLabel from "@mui/material/TableSortLabel";
 import Pagination from "@mui/material/Pagination";
 import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import "../page.scss";
 
 const columns = [
   { id: "id", label: "ID", sortable: true },
@@ -33,7 +27,7 @@ const columns = [
   { id: "download", label: "Download", sortable: false },
 ];
 
-export default function ClientContentList({
+export default function ChartTable({
   initialContents,
   currentPage,
   totalPages,
@@ -44,71 +38,33 @@ export default function ClientContentList({
   sortOrder,
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [currentSearchBy, setCurrentSearchBy] = useState(searchBy);
-  const [currentSearch, setCurrentSearch] = useState(search);
 
   const handleSort = (column) => {
     const newSortOrder =
       sortBy === column && sortOrder === "asc" ? "desc" : "asc";
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("sortBy", column);
-    params.set("sortOrder", newSortOrder);
-    params.set("page", "1");
+    const params = new URLSearchParams({
+      searchBy,
+      search,
+      sortBy: column,
+      sortOrder: newSortOrder,
+      page: "1",
+    });
     router.push(`/?${params.toString()}`);
   };
 
   const handlePageChange = (event, newPage) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("page", newPage.toString());
-    router.push(`/?${params.toString()}`);
-  };
-
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("searchBy", currentSearchBy);
-    params.set("search", currentSearch);
-    params.set("page", "1");
+    const params = new URLSearchParams({
+      searchBy,
+      search,
+      sortBy,
+      sortOrder,
+      page: newPage.toString(),
+    });
     router.push(`/?${params.toString()}`);
   };
 
   return (
-    <div className="container">
-      <Box className="title-container">
-        <Box>
-          <Typography className="title" variant="h4">
-            DankaguLike Chart List
-          </Typography>
-        </Box>
-        <Box className="search-container">
-          <form onSubmit={handleSearchSubmit} className="search-form">
-            <Select
-              value={currentSearchBy}
-              onChange={(e) => setCurrentSearchBy(e.target.value)}
-            >
-              <MenuItem value="title">By title</MenuItem>
-              <MenuItem value="publisher">By publisher</MenuItem>
-            </Select>
-            <TextField
-              id="search"
-              value={currentSearch}
-              onChange={(e) => setCurrentSearch(e.target.value)}
-            />
-            <Button type="submit" className="btn-search">
-              Search
-            </Button>
-          </form>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => router.push('https://docs.google.com/spreadsheets/d/1PeaP2J8wSOittu1ocdCC-AQNb6ph6QHnBl7g1Xfz_Ig/edit?gid=1184683173#gid=1184683173')}
-          >
-            Request new chart
-          </Button>
-        </Box>
-      </Box>
-      <span id="resultCount">{totalCount} results</span>
+    <>
       <TableContainer component={Paper} className="table-wrapper">
         <Table>
           <TableHead>
@@ -173,6 +129,21 @@ export default function ClientContentList({
                     className="btn-download"
                     href={content.downloadUrl}
                     target="_blank"
+                    onClick={async () => {
+                      try {
+                        await fetch(
+                          `/api/contents/${content.id}/downloaded`,
+                          {
+                            method: "PUT",
+                          }
+                        );
+                      } catch (error) {
+                        console.error(
+                          "Failed to update download count:",
+                          error
+                        );
+                      }
+                    }}
                   >
                     Download
                   </Button>
@@ -200,6 +171,6 @@ export default function ClientContentList({
           color="primary"
         />
       </Box>
-    </div>
+    </>
   );
 }
