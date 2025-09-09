@@ -12,7 +12,7 @@ import Pagination from "@mui/material/Pagination";
 import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import "../page.scss";
+import "./PageContent.scss";
 
 const columns = [
   { id: "id", label: "ID", sortable: true },

@@ -5,7 +5,7 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
-import "../page.scss";
+import "./PageContent.scss";
 
 export default function SearchForm({ initialSearchBy, initialSearch, onSearch }) {
   const [currentSearchBy, setCurrentSearchBy] = useState(initialSearchBy);
