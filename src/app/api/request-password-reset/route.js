@@ -1,6 +1,4 @@
-import { connectDB } from "../../../../../../lib/db";
-// import jwt from "jsonwebtoken"; // Uncomment if needed for token generation
-// import { secret } from "../../../../../../utils/constants"; // Uncomment if needed
+import { connectDB } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
